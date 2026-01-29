@@ -23,13 +23,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Unified Claude job that handles all triggers
-  claude:
+  # Handles @claude mentions in comments and reviews
+  claude-interactive:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve') ||
       (github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.body, '@claude')) ||
       (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude-bot')
     runs-on: ubuntu-latest
@@ -48,5 +47,27 @@ jobs:
             --model claude-opus-4-5-20251101
           track_progress: true
           use_sticky_comment: true
+          branch_prefix: "claude/"
+          base_branch: "main"
+
+  # Auto-solve: implements issue when labeled
+  auto-solve:
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "Implement a solution for this issue. Create a PR with your changes."
+          claude_args: |
+            --max-turns 10
+            --model claude-opus-4-5-20251101
+          track_progress: true
           branch_prefix: "claude/"
           base_branch: "main"
