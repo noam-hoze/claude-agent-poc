@@ -1,0 +1,11 @@
+name = "repo-configurator"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Secrets (set via `wrangler secret put <name>`):
+# - GITHUB_APP_ID: Your GitHub App ID
+# - GITHUB_APP_PRIVATE_KEY: Your GitHub App private key (PEM format)
+# - GITHUB_WEBHOOK_SECRET: The webhook secret you set in the GitHub App
+
+[vars]
+# Non-sensitive configuration (sensitive values go in secrets)

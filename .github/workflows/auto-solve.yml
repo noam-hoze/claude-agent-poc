@@ -1,29 +1,54 @@
+# Claude Code Workflow
+#
+# This workflow integrates Claude AI into GitHub to automatically handle issues and PRs.
+#
+# Two main features:
+# 1. Interactive Mode: Responds to @claude mentions in issues, PRs, and comments
+# 2. Auto-solve Mode: Automatically implements issues labeled with "auto-solve"
+#
+# Prerequisites:
+# - ANTHROPIC_API_KEY secret must be configured in repository settings
+# - "Allow GitHub Actions to create and approve pull requests" must be enabled
+#   (Settings > Actions > General > Workflow permissions)
+
 name: Claude Code
 
 on:
+  # Triggers for interactive @claude mentions
   issue_comment:
     types: [created]
   pull_request_review_comment:
     types: [created]
   pull_request_review:
     types: [submitted]
+  # Triggers for auto-solve and issue assignments
   issues:
     types: [opened, assigned, labeled]
 
+# Required permissions for Claude to interact with the repository
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
-  actions: read  # Required for reading CI results
+  contents: write       # Create branches, commits, and push changes
+  pull-requests: write  # Create and update pull requests
+  issues: write         # Comment on issues and update labels2
+  id-token: write       # Authentication with external services
+  actions: read         # Read CI/CD workflow results
 
-# Prevent concurrent runs on the same issue/PR
+# Prevent concurrent runs on the same issue/PR to avoid conflicts
 concurrency:
   group: claude-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  # Handles @claude mentions in comments and reviews
+  # ============================================================================
+  # INTERACTIVE MODE: Responds to @claude mentions
+  # ============================================================================
+  # This job runs when:
+  # - Someone mentions @claude in an issue comment, PR comment, or review
+  # - A new issue is opened with @claude mentioned in the description
+  # - An issue is assigned to the claude-bot user
+  #
+  # Claude will respond to the mention and can help with code review,
+  # bug investigation, feature implementation, and general coding questions.
   claude-interactive:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -36,7 +61,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Full history for better context
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
@@ -45,13 +70,23 @@ jobs:
           claude_args: |
             --max-turns 10
             --model claude-opus-4-5-20251101
-          track_progress: true
-          use_sticky_comment: true
-          branch_prefix: "claude/"
-          base_branch: "main"
+          track_progress: true       # Show progress in comments
+          use_sticky_comment: true   # Update single comment instead of creating multiple
+          branch_prefix: "claude/"   # Prefix for new branches
+          base_branch: "main"        # Base branch for PRs
 
-  # Auto-solve: implements issue when labeled
-  # Repository setting "Allow GitHub Actions to create and approve pull requests" must be enabled
+  # ============================================================================
+  # AUTO-SOLVE MODE: Automatically implements issues when labeled
+  # ============================================================================
+  # This job runs when an issue is labeled with "auto-solve"
+  #
+  # Workflow:
+  # 1. Reads the issue description and requirements
+  # 2. Implements a complete solution with working code
+  # 3. Commits and pushes changes to a new claude/* branch
+  # 4. Automatically creates a PR linking back to the issue
+  #
+  # Usage: Simply add the "auto-solve" label to any issue
   auto-solve:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve'
     runs-on: ubuntu-latest
@@ -59,7 +94,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Full history needed for branching
 
       - name: Setup gh CLI with token
         run: |
@@ -83,10 +118,11 @@ jobs:
           claude_args: |
             --max-turns 20
             --model claude-sonnet-4-5-20250929
-          track_progress: true
-          branch_prefix: "claude/"
-          base_branch: "main"
+          track_progress: true       # Show progress in issue comments
+          branch_prefix: "claude/"   # Creates branches like claude/issue-123
+          base_branch: "main"        # Branch to create PRs against
 
+      # Automatically create a PR after Claude completes implementation
       - name: Create PR if needed
         if: steps.claude.outcome == 'success'
         run: |
@@ -94,18 +130,18 @@ jobs:
           BRANCH=$(git branch --show-current)
           echo "Current branch: $BRANCH"
 
-          # Check if this is a claude branch
+          # Only create PR if we're on a claude/* branch
           if [[ $BRANCH == claude/* ]]; then
-            # Check if PR already exists for this branch
+            # Check if PR already exists to avoid duplicates
             EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
             if [ -z "$EXISTING_PR" ]; then
               echo "No PR exists for $BRANCH, creating one..."
 
-              # Extract title from the latest commit (subject line only)
+              # Use the latest commit message as the PR title
               COMMIT_MSG=$(git log -1 --pretty=%s)
 
-              # Create the PR body
+              # Build PR description with issue reference and changes
               PR_BODY=$(cat <<EOF
           Resolves #${{ github.event.issue.number }}
 
@@ -119,7 +155,7 @@ jobs:
           EOF
               )
 
-              # Create the PR
+              # Create the PR targeting main branch
               gh pr create \
                 --base main \
                 --head "$BRANCH" \
