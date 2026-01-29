@@ -61,13 +61,39 @@ jobs:
           fetch-depth: 0
 
       - name: Run Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "Implement a solution for this issue. Create a PR with your changes."
+          prompt: |
+            Read this issue carefully and implement a complete solution with working code.
+
+            Requirements:
+            - Write all necessary code files
+            - Create a new branch with your changes
+            - Commit and push your changes
+            - Create a pull request
+
+            Do NOT just analyze - actually implement the solution.
           claude_args: |
-            --max-turns 10
-            --model claude-opus-4-5-20251101
+            --max-turns 20
+            --model claude-sonnet-4-5-20250929
           track_progress: true
           branch_prefix: "claude/"
           base_branch: "main"
+
+      - name: Output execution log
+        if: always()
+        run: |
+          echo "::group::Claude Execution Summary"
+          if [ -f /home/runner/work/_temp/claude-execution-output.json ]; then
+            cat /home/runner/work/_temp/claude-execution-output.json | jq '{type, subtype, num_turns, total_cost_usd, permission_denials}'
+          fi
+          echo "::endgroup::"
+
+      - name: Check outcome
+        if: steps.claude.outcome == 'failure'
+        run: |
+          echo "::error::Claude Code execution failed"
+          exit 1
