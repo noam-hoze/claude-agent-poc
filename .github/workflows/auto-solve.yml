@@ -61,36 +61,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Debug Environment
-        continue-on-error: true
-        run: |
-          echo "=== Environment Check ==="
-          echo "Working directory: $(pwd)"
-          echo "Issue number: ${{ github.event.issue.number }}"
-          echo "Issue title: ${{ github.event.issue.title }}"
-          echo "Git status:"
-          git status
-          echo "gh version:"
-          gh --version
-          echo "gh auth status:"
-          gh auth status || echo "gh not authenticated yet (will be handled by claude-code-action)"
-
       - name: Setup gh CLI with token
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          echo "=== gh auth status after login ==="
-          gh auth status
-
-      - name: Test gh CLI
-        run: |
-          echo "=== Testing gh CLI ==="
-          gh pr list --limit 1 || echo "gh pr list failed"
-          gh issue view ${{ github.event.issue.number }} || echo "gh issue view failed"
 
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
-        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -109,37 +86,6 @@ jobs:
           track_progress: true
           branch_prefix: "claude/"
           base_branch: "main"
-
-      - name: Debug Claude Output
-        if: always()
-        run: |
-          echo "=== Claude Step Results ==="
-          echo "Outcome: ${{ steps.claude.outcome }}"
-          echo "Conclusion: ${{ steps.claude.conclusion }}"
-
-          echo "=== Git Status ==="
-          git status
-          git log -1 --oneline 2>/dev/null || echo "No commits"
-
-          echo "=== Branches ==="
-          git branch -a | grep claude || echo "No claude branches"
-          git ls-remote --heads origin | grep claude || echo "No remote claude branches"
-
-          echo "=== Checking for execution log ==="
-          if [ -f /home/runner/work/_temp/claude-execution-output.json ]; then
-            echo "✓ Log file exists ($(wc -c < /home/runner/work/_temp/claude-execution-output.json) bytes)"
-            echo "=== Last 50 lines ==="
-            tail -50 /home/runner/work/_temp/claude-execution-output.json
-          else
-            echo "✗ No log file found"
-            ls -la /home/runner/work/_temp/ | grep claude || echo "No claude files"
-          fi
-
-      - name: Check for PR
-        if: always()
-        run: |
-          echo "=== Checking for PRs ==="
-          gh pr list --state all --limit 10 --json number,title,headRefName,state
 
       - name: Create PR if needed
         if: steps.claude.outcome == 'success'
@@ -186,13 +132,4 @@ jobs:
             fi
           else
             echo "Not on a claude/* branch, skipping PR creation"
-          fi
-
-      - name: Report Status
-        if: always()
-        run: |
-          if [ "${{ steps.claude.outcome }}" = "success" ]; then
-            echo "✓ Claude completed successfully"
-          else
-            echo "✗ Claude failed or was skipped"
           fi
