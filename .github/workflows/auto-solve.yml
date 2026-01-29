@@ -93,19 +93,18 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Read this issue carefully and implement a complete solution with working code.
+            Read issue #${{ github.event.issue.number }} and implement a complete solution with working code.
 
-            CRITICAL STEPS - DO NOT SKIP:
-            1. Create the requested file(s)
-            2. Commit your changes: git add . && git commit -m "message"
-            3. Push to a new branch: git push origin HEAD
-            4. Create a pull request: gh pr create --base main --title "Your title" --body "Fixes #${{ github.event.issue.number }}"
+            REQUIREMENTS:
+            1. Create or modify the requested files with working, tested code
+            2. Commit your changes with a descriptive message: git add . && git commit -m "Clear description"
+            3. Push to the current branch: git push origin HEAD
 
-            VERIFY each step completed successfully before moving to the next.
+            The workflow will automatically create a pull request after you push.
+            VERIFY each step completes successfully before moving to the next.
           claude_args: |
             --max-turns 20
             --model claude-sonnet-4-5-20250929
-            --allowedTools "Bash(gh *)"
           track_progress: true
           branch_prefix: "claude/"
           base_branch: "main"
@@ -140,6 +139,53 @@ jobs:
         run: |
           echo "=== Checking for PRs ==="
           gh pr list --state all --limit 10 --json number,title,headRefName,state
+
+      - name: Create PR if needed
+        if: steps.claude.outcome == 'success'
+        run: |
+          # Get the current branch name
+          BRANCH=$(git branch --show-current)
+          echo "Current branch: $BRANCH"
+
+          # Check if this is a claude branch
+          if [[ $BRANCH == claude/* ]]; then
+            # Check if PR already exists for this branch
+            EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+
+            if [ -z "$EXISTING_PR" ]; then
+              echo "No PR exists for $BRANCH, creating one..."
+
+              # Extract a title from the latest commit
+              COMMIT_MSG=$(git log -1 --pretty=%B)
+
+              # Create the PR body
+              PR_BODY=$(cat <<EOF
+          Resolves #${{ github.event.issue.number }}
+
+          This PR was automatically created by the Claude auto-solve workflow.
+
+          ## Changes
+          $(git log main..HEAD --pretty=format:'- %s')
+
+          ---
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+          EOF
+              )
+
+              # Create the PR
+              gh pr create \
+                --base main \
+                --head "$BRANCH" \
+                --title "$COMMIT_MSG" \
+                --body "$PR_BODY"
+
+              echo "✓ PR created successfully"
+            else
+              echo "PR #$EXISTING_PR already exists for $BRANCH"
+            fi
+          else
+            echo "Not on a claude/* branch, skipping PR creation"
+          fi
 
       - name: Report Status
         if: always()
