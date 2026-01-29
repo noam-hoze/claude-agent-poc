@@ -221,10 +221,6 @@ jobs:
           use_sticky_comment: true
           branch_prefix: "claude/"
           base_branch: "main"
-          allowed_tools: |
-            Bash(chmod:*)
-            Bash(npm:*)
-            Bash(git:*)
 
       # =========== TESTING PHASE ===========
       - name: Run Claude - Testing Phase
@@ -254,10 +250,6 @@ jobs:
             --model claude-sonnet-4-5-20250929
           track_progress: true
           use_sticky_comment: true
-          allowed_tools: |
-            Bash(npm:*)
-            Bash(pytest:*)
-            Bash(git:*)
 
       # =========== PR CREATION PHASE ===========
       - name: Create PR
@@ -333,7 +325,3 @@ jobs:
             --model claude-sonnet-4-5-20250929
           track_progress: true
           use_sticky_comment: true
-          allowed_tools: |
-            Bash(chmod:*)
-            Bash(npm:*)
-            Bash(git:*)
