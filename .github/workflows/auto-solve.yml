@@ -215,12 +215,16 @@ jobs:
             ---
             ✅ **Implementation complete.** Reply with `/approve` to proceed to testing, or provide feedback to revise the code.
           claude_args: |
-            --max-turns 15
+            --max-turns 30
             --model claude-sonnet-4-5-20250929
           track_progress: true
           use_sticky_comment: true
           branch_prefix: "claude/"
           base_branch: "main"
+          allowed_tools: |
+            Bash(chmod:*)
+            Bash(npm:*)
+            Bash(git:*)
 
       # =========== TESTING PHASE ===========
       - name: Run Claude - Testing Phase
@@ -246,10 +250,14 @@ jobs:
             ---
             ✅ **Testing complete.** Reply with `/approve` to create the PR, or provide feedback to revise.
           claude_args: |
-            --max-turns 10
+            --max-turns 15
             --model claude-sonnet-4-5-20250929
           track_progress: true
           use_sticky_comment: true
+          allowed_tools: |
+            Bash(npm:*)
+            Bash(pytest:*)
+            Bash(git:*)
 
       # =========== PR CREATION PHASE ===========
       - name: Create PR
@@ -321,7 +329,11 @@ jobs:
             ---
             ✅ **Revision complete.** Reply with `/approve` to proceed, or provide more feedback.
           claude_args: |
-            --max-turns 10
+            --max-turns 15
             --model claude-sonnet-4-5-20250929
           track_progress: true
           use_sticky_comment: true
+          allowed_tools: |
+            Bash(chmod:*)
+            Bash(npm:*)
+            Bash(git:*)
