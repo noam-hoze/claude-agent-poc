@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Productivity Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      color: white;
+      margin-bottom: 50px;
+      padding: 40px 20px;
+    }
+
+    header h1 {
+      font-size: 3em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    header p {
+      font-size: 1.3em;
+      opacity: 0.95;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+      margin-bottom: 40px;
+    }
+
+    .feature-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .feature-card h3 {
+      color: #667eea;
+      font-size: 1.5em;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .feature-card .icon {
+      font-size: 2em;
+    }
+
+    .feature-card p {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .stats-section {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      margin-bottom: 40px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .stats-section h2 {
+      color: #667eea;
+      margin-bottom: 30px;
+      text-align: center;
+      font-size: 2em;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      color: white;
+    }
+
+    .stat-item .stat-value {
+      font-size: 2.5em;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .stat-item .stat-label {
+      font-size: 1em;
+      opacity: 0.9;
+    }
+
+    .cta-section {
+      background: white;
+      border-radius: 12px;
+      padding: 50px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .cta-section h2 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 2em;
+    }
+
+    .cta-section p {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 1.2em;
+    }
+
+    .cta-button {
+      display: inline-block;
+      padding: 15px 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 30px;
+      font-size: 1.1em;
+      font-weight: 600;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+    }
+
+    footer {
+      text-align: center;
+      color: white;
+      margin-top: 50px;
+      padding: 20px;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 768px) {
+      header h1 {
+        font-size: 2em;
+      }
+
+      header p {
+        font-size: 1.1em;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-section {
+        padding: 30px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>QA Productivity Dashboard</h1>
+      <p>Chat-first dashboard for tracking QA metrics, team productivity, and actionable insights</p>
+    </header>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3><span class="icon">📊</span> Metrics Tracking</h3>
+        <p>Comprehensive tracking of QA metrics including test coverage, bug detection rates, and team velocity. Monitor key performance indicators in real-time.</p>
+      </div>
+
+      <div class="feature-card">
+        <h3><span class="icon">💬</span> Chat Interface</h3>
+        <p>Natural language queries for instant insights. Ask questions about your QA data and get immediate, actionable answers through our intelligent chat system.</p>
+      </div>
+
+      <div class="feature-card">
+        <h3><span class="icon">📈</span> Analytics & Insights</h3>
+        <p>Deep dive into trends and patterns with advanced analytics. Identify bottlenecks, predict issues, and optimize your testing process with data-driven insights.</p>
+      </div>
+
+      <div class="feature-card">
+        <h3><span class="icon">⚡</span> Performance Monitoring</h3>
+        <p>Track blocked time reduction and team productivity. Measure the impact of process improvements and identify areas for optimization.</p>
+      </div>
+
+      <div class="feature-card">
+        <h3><span class="icon">📅</span> Daily Briefs</h3>
+        <p>Automated daily summaries delivered to your inbox. Stay informed about critical metrics, blockers, and achievements without manual reporting.</p>
+      </div>
+
+      <div class="feature-card">
+        <h3><span class="icon">🎯</span> Goal Tracking</h3>
+        <p>Set and monitor quality goals across sprints and releases. Visualize progress toward targets and celebrate team achievements.</p>
+      </div>
+    </div>
+
+    <div class="stats-section">
+      <h2>Dashboard at a Glance</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value">95%</div>
+          <div class="stat-label">Test Coverage</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">142</div>
+          <div class="stat-label">Tests Automated</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">-40%</div>
+          <div class="stat-label">Blocked Time</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">8.5/10</div>
+          <div class="stat-label">Team Velocity</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-section">
+      <h2>Ready to Boost Your QA Productivity?</h2>
+      <p>Start making data-driven decisions and improve your team's efficiency today.</p>
+      <a href="#" class="cta-button">Get Started</a>
+    </div>
+
+    <footer>
+      <p>&copy; 2026 QA Productivity Dashboard. Built for excellence in quality assurance.</p>
+    </footer>
+  </div>
+</body>
+</html>
