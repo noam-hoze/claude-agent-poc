@@ -156,8 +156,8 @@ jobs:
             if [ -z "$EXISTING_PR" ]; then
               echo "No PR exists for $BRANCH, creating one..."
 
-              # Extract title from the latest commit (subject line only)
-              COMMIT_MSG=$(git log -1 --pretty=%s)
+              # Extract a title from the latest commit
+              COMMIT_MSG=$(git log -1 --pretty=%B)
 
               # Create the PR body
               PR_BODY=$(cat <<EOF
