@@ -14,6 +14,11 @@ permissions:
   issues: write
   id-token: write
 
+# Allow multiple concurrent runs
+concurrency:
+  group: claude-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   # Responds to @claude mentions in comments
   claude-comment:
