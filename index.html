@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Productivity Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 QA Productivity Dashboard</h1>
+            <div class="date-display" id="dateDisplay"></div>
+        </header>
+
+        <!-- Today's Brief Section -->
+        <section class="brief-section">
+            <h2>📊 Today's Brief</h2>
+            <div id="todaysBrief" class="brief-content">
+                <!-- Generated brief items will appear here -->
+            </div>
+        </section>
+
+        <!-- Chat Interface -->
+        <section class="chat-section">
+            <h2>💬 Ask a Question</h2>
+            <div class="example-prompts" id="examplePrompts">
+                <!-- Example prompts will be generated here -->
+            </div>
+            <div class="chat-input-container">
+                <input
+                    type="text"
+                    id="chatInput"
+                    placeholder="Ask me anything about QA metrics..."
+                    class="chat-input"
+                >
+                <button id="sendButton" class="send-button">Send</button>
+            </div>
+
+            <!-- Chat History -->
+            <div id="chatHistory" class="chat-history">
+                <!-- Chat messages will appear here -->
+            </div>
+        </section>
+
+        <!-- Evidence Cards Section -->
+        <section class="evidence-section" id="evidenceSection" style="display: none;">
+            <h2>📈 Evidence</h2>
+            <div id="evidenceCards" class="evidence-cards">
+                <!-- Evidence cards will appear here -->
+            </div>
+        </section>
+
+        <!-- Suggested Experiments Section -->
+        <section class="experiments-section" id="experimentsSection" style="display: none;">
+            <h2>🧪 Suggested Experiments</h2>
+            <div id="experimentCards" class="experiment-cards">
+                <!-- Experiment suggestions will appear here -->
+            </div>
+        </section>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="insights.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
