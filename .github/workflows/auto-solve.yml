@@ -60,6 +60,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Debug Environment
+        run: |
+          echo "=== Environment Check ==="
+          echo "Working directory: $(pwd)"
+          echo "Issue number: ${{ github.event.issue.number }}"
+          echo "Issue title: ${{ github.event.issue.title }}"
+          echo "Git status:"
+          git status
+          echo "gh version:"
+          gh --version
+          echo "gh auth status:"
+          gh auth status
+
+      - name: Test gh CLI
+        run: |
+          echo "=== Testing gh CLI ==="
+          gh pr list --limit 1 || echo "gh pr list failed"
+          gh issue view ${{ github.event.issue.number }} || echo "gh issue view failed"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -69,13 +88,13 @@ jobs:
           prompt: |
             Read this issue carefully and implement a complete solution with working code.
 
-            Requirements:
-            - Write all necessary code files
-            - Create a new branch with your changes
-            - Commit and push your changes
-            - Create a pull request
+            CRITICAL STEPS - DO NOT SKIP:
+            1. Create the requested file(s)
+            2. Commit your changes: git add . && git commit -m "message"
+            3. Push to a new branch: git push origin HEAD
+            4. Create a pull request: gh pr create --base main --title "Your title" --body "Fixes #${{ github.event.issue.number }}"
 
-            Do NOT just analyze - actually implement the solution.
+            VERIFY each step completed successfully before moving to the next.
           claude_args: |
             --max-turns 20
             --model claude-sonnet-4-5-20250929
@@ -84,33 +103,42 @@ jobs:
           branch_prefix: "claude/"
           base_branch: "main"
 
-      - name: Output execution log
+      - name: Debug Claude Output
         if: always()
         run: |
-          echo "::group::Claude Execution Summary"
+          echo "=== Claude Step Results ==="
+          echo "Outcome: ${{ steps.claude.outcome }}"
+          echo "Conclusion: ${{ steps.claude.conclusion }}"
+
+          echo "=== Git Status ==="
+          git status
+          git log -1 --oneline 2>/dev/null || echo "No commits"
+
+          echo "=== Branches ==="
+          git branch -a | grep claude || echo "No claude branches"
+          git ls-remote --heads origin | grep claude || echo "No remote claude branches"
+
+          echo "=== Checking for execution log ==="
           if [ -f /home/runner/work/_temp/claude-execution-output.json ]; then
-            # Extract result entry from log with fallback
-            RESULT=$(jq -r '
-              (if type == "array" then
-                map(select(.type == "result")) | .[-1]
-              else
-                .
-              end) |
-              "Status: \(.subtype // "unknown")\nTurns: \(.num_turns // 0)\nCost: $\(.total_cost_usd // 0)\nDenials: \((.permission_denials // []) | length)"
-            ' /home/runner/work/_temp/claude-execution-output.json 2>&1)
-
-            if [ $? -eq 0 ]; then
-              echo "$RESULT"
-            else
-              echo "Could not parse execution log, showing raw output:"
-              tail -30 /home/runner/work/_temp/claude-execution-output.json
-            fi
+            echo "✓ Log file exists ($(wc -c < /home/runner/work/_temp/claude-execution-output.json) bytes)"
+            echo "=== Last 50 lines ==="
+            tail -50 /home/runner/work/_temp/claude-execution-output.json
           else
-            echo "No execution log found"
+            echo "✗ No log file found"
+            ls -la /home/runner/work/_temp/ | grep claude || echo "No claude files"
           fi
-          echo "::endgroup::"
 
-      - name: Check outcome
-        if: steps.claude.outcome == 'failure'
+      - name: Check for PR
+        if: always()
         run: |
-          echo "::warning::Claude Code execution encountered issues. Check logs above for details."
+          echo "=== Checking for PRs ==="
+          gh pr list --state all --limit 10 --json number,title,headRefName,state
+
+      - name: Report Status
+        if: always()
+        run: |
+          if [ "${{ steps.claude.outcome }}" = "success" ]; then
+            echo "✓ Claude completed successfully"
+          else
+            echo "✗ Claude failed or was skipped"
+          fi
