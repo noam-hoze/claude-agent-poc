@@ -51,7 +51,7 @@ jobs:
           base_branch: "main"
 
   # Auto-solve: implements issue when labeled
-  # Claude creates the PR using GitHub MCP tools (GitHub App auth)
+  # Repository setting "Allow GitHub Actions to create and approve pull requests" must be enabled
   auto-solve:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve'
     runs-on: ubuntu-latest
@@ -96,21 +96,13 @@ jobs:
           prompt: |
             Read issue #${{ github.event.issue.number }} and implement a complete solution with working code.
 
-            CRITICAL REQUIREMENTS (do all steps):
+            REQUIREMENTS:
             1. Create or modify the requested files with working, tested code
             2. Commit your changes: git add . && git commit -m "Clear descriptive message"
             3. Push to the current branch: git push origin HEAD
-            4. Get the current branch name: git branch --show-current
-            5. CREATE THE PULL REQUEST using mcp__github__create_pull_request:
-               - owner: "noam-hoze"
-               - repo: "claude-agent-poc"
-               - head: (the branch name from step 4)
-               - base: "main"
-               - title: Brief description of what you implemented
-               - body: "Resolves #${{ github.event.issue.number }}\n\n[Description of changes]\n\n---\n🤖 Generated with [Claude Code](https://claude.ai/code)"
 
-            YOU MUST use the mcp__github__create_pull_request tool to create the PR.
-            Do NOT skip step 5. The PR must be created by you, not the workflow.
+            The workflow will automatically create a pull request after you push.
+            VERIFY each step completes successfully before moving to the next.
           claude_args: |
             --max-turns 20
             --model claude-sonnet-4-5-20250929
@@ -149,22 +141,51 @@ jobs:
           echo "=== Checking for PRs ==="
           gh pr list --state all --limit 10 --json number,title,headRefName,state
 
-      - name: Verify PR was created
+      - name: Create PR if needed
         if: steps.claude.outcome == 'success'
         run: |
           # Get the current branch name
           BRANCH=$(git branch --show-current)
-          echo "Checking for PR on branch: $BRANCH"
+          echo "Current branch: $BRANCH"
 
-          # Check if PR exists for this branch
-          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number,title --jq '.[0]')
+          # Check if this is a claude branch
+          if [[ $BRANCH == claude/* ]]; then
+            # Check if PR already exists for this branch
+            EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
-          if [ -n "$EXISTING_PR" ]; then
-            echo "✓ PR found: $EXISTING_PR"
+            if [ -z "$EXISTING_PR" ]; then
+              echo "No PR exists for $BRANCH, creating one..."
+
+              # Extract a title from the latest commit
+              COMMIT_MSG=$(git log -1 --pretty=%B)
+
+              # Create the PR body
+              PR_BODY=$(cat <<EOF
+          Resolves #${{ github.event.issue.number }}
+
+          This PR was automatically created by the Claude auto-solve workflow.
+
+          ## Changes
+          $(git log main..HEAD --pretty=format:'- %s')
+
+          ---
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+          EOF
+              )
+
+              # Create the PR
+              gh pr create \
+                --base main \
+                --head "$BRANCH" \
+                --title "$COMMIT_MSG" \
+                --body "$PR_BODY"
+
+              echo "✓ PR created successfully"
+            else
+              echo "PR #$EXISTING_PR already exists for $BRANCH"
+            fi
           else
-            echo "⚠️  WARNING: No PR found for branch $BRANCH"
-            echo "Claude should have created the PR using mcp__github__create_pull_request"
-            echo "Check the Claude execution logs for errors"
+            echo "Not on a claude/* branch, skipping PR creation"
           fi
 
       - name: Report Status
