@@ -4,7 +4,7 @@
 #
 # Two main features:
 # 1. Interactive Mode: Responds to @claude mentions in issues, PRs, and comments
-# 2. Auto-solve Mode: Automatically implements issues labeled with "auto-solve"
+# 2. Auto-solve Mode: Implements issues with human approval at each phase
 #
 # Prerequisites:
 # - ANTHROPIC_API_KEY secret must be configured in repository settings
@@ -14,7 +14,7 @@
 name: Claude Code
 
 on:
-  # Triggers for interactive @claude mentions
+  # Triggers for interactive @claude mentions and /approve commands
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -29,7 +29,7 @@ on:
 permissions:
   contents: write       # Create branches, commits, and push changes
   pull-requests: write  # Create and update pull requests
-  issues: write         # Comment on issues and update labels2
+  issues: write         # Comment on issues and update labels
   id-token: write       # Authentication with external services
   actions: read         # Read CI/CD workflow results
 
@@ -42,13 +42,6 @@ jobs:
   # ============================================================================
   # INTERACTIVE MODE: Responds to @claude mentions
   # ============================================================================
-  # This job runs when:
-  # - Someone mentions @claude in an issue comment, PR comment, or review
-  # - A new issue is opened with @claude mentioned in the description
-  # - An issue is assigned to the claude-bot user
-  #
-  # Claude will respond to the mention and can help with code review,
-  # bug investigation, feature implementation, and general coding questions.
   claude-interactive:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -61,7 +54,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better context
+          fetch-depth: 0
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
@@ -70,82 +63,221 @@ jobs:
           claude_args: |
             --max-turns 10
             --model claude-opus-4-5-20251101
-          track_progress: true       # Show progress in comments
-          use_sticky_comment: true   # Update single comment instead of creating multiple
-          branch_prefix: "claude/"   # Prefix for new branches
-          base_branch: "main"        # Base branch for PRs
+          track_progress: true
+          use_sticky_comment: true
+          branch_prefix: "claude/"
+          base_branch: "main"
 
   # ============================================================================
-  # AUTO-SOLVE MODE: Automatically implements issues when labeled
+  # AUTO-SOLVE MODE: Phased implementation with human approval
   # ============================================================================
-  # This job runs when an issue is labeled with "auto-solve"
+  # Phases:
+  # 1. PLANNING - Claude analyzes and proposes a plan (no code)
+  # 2. CODING - Claude implements after plan approval
+  # 3. TESTING - Claude validates after code approval
+  # 4. PR - Creates PR after testing approval
   #
-  # Workflow:
-  # 1. Reads the issue description and requirements
-  # 2. Implements a complete solution with working code
-  # 3. Commits and pushes changes to a new claude/* branch
-  # 4. Automatically creates a PR linking back to the issue
-  #
-  # Usage: Simply add the "auto-solve" label to any issue
-  auto-solve:
-    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve'
+  # Commands:
+  # - /approve : Approve current phase and proceed to next
+  # - Any other comment: Feedback for Claude to revise current phase
+  auto-solve-phased:
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-solve') ||
+      (github.event_name == 'issue_comment' && contains(join(github.event.issue.labels.*.name, ','), 'auto-solve') && !contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history needed for branching
+          fetch-depth: 0
 
-      - name: Setup gh CLI with token
+      - name: Setup gh CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Determine current phase and action
+        id: phase
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          # Get current labels
+          LABELS=$(gh issue view $ISSUE_NUMBER --json labels --jq '.labels[].name' | tr '\n' ',')
+          echo "Current labels: $LABELS"
 
-      - name: Run Claude Code
-        id: claude
+          # Determine current phase from labels
+          if [[ "$LABELS" == *"phase:testing"* ]]; then
+            CURRENT_PHASE="testing"
+          elif [[ "$LABELS" == *"phase:coding"* ]]; then
+            CURRENT_PHASE="coding"
+          elif [[ "$LABELS" == *"phase:planning"* ]]; then
+            CURRENT_PHASE="planning"
+          else
+            CURRENT_PHASE="none"
+          fi
+          echo "Current phase: $CURRENT_PHASE"
+
+          # Determine action based on event
+          if [[ "$EVENT_NAME" == "issues" && "$EVENT_ACTION" == "labeled" ]]; then
+            # Fresh start - begin planning
+            ACTION="start"
+            NEXT_PHASE="planning"
+          elif [[ "$COMMENT_BODY" == "/approve"* ]]; then
+            # Approval - advance to next phase
+            ACTION="advance"
+            case "$CURRENT_PHASE" in
+              "planning") NEXT_PHASE="coding" ;;
+              "coding") NEXT_PHASE="testing" ;;
+              "testing") NEXT_PHASE="pr" ;;
+              *) NEXT_PHASE="planning" ;;
+            esac
+          else
+            # Feedback - revise current phase
+            ACTION="revise"
+            NEXT_PHASE="$CURRENT_PHASE"
+          fi
+
+          echo "Action: $ACTION"
+          echo "Next phase: $NEXT_PHASE"
+
+          echo "current_phase=$CURRENT_PHASE" >> $GITHUB_OUTPUT
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "next_phase=$NEXT_PHASE" >> $GITHUB_OUTPUT
+
+      - name: Update phase label
+        if: steps.phase.outputs.action != 'revise'
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CURRENT_PHASE: ${{ steps.phase.outputs.current_phase }}
+          NEXT_PHASE: ${{ steps.phase.outputs.next_phase }}
+        run: |
+          # Remove current phase label if exists
+          if [[ "$CURRENT_PHASE" != "none" ]]; then
+            gh issue edit $ISSUE_NUMBER --remove-label "phase:$CURRENT_PHASE" || true
+          fi
+
+          # Add next phase label (unless it's PR phase)
+          if [[ "$NEXT_PHASE" != "pr" ]]; then
+            gh issue edit $ISSUE_NUMBER --add-label "phase:$NEXT_PHASE" || true
+          fi
+
+      # =========== PLANNING PHASE ===========
+      - name: Run Claude - Planning Phase
+        if: steps.phase.outputs.next_phase == 'planning'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Read issue #${{ github.event.issue.number }} and implement a complete solution with working code.
+            Analyze issue #${{ github.event.issue.number }} and create a detailed implementation plan.
 
-            REQUIREMENTS:
-            1. Create or modify the requested files with working, tested code
-            2. Commit your changes: git add . && git commit -m "Clear descriptive message"
-            3. Push to the current branch: git push origin HEAD
+            ⚠️ IMPORTANT: DO NOT write any code yet. This is the PLANNING phase only.
 
-            The workflow will automatically create a pull request after you push.
-            VERIFY each step completes successfully before moving to the next.
+            Create a plan that includes:
+            1. **Summary**: Brief description of what needs to be done
+            2. **Files to modify/create**: List each file with what changes are needed
+            3. **Approach**: Step-by-step implementation approach
+            4. **Considerations**: Any edge cases, potential issues, or questions
+
+            Format your response clearly with headers.
+
+            End your response with:
+            ---
+            ✅ **Plan complete.** Reply with `/approve` to proceed to implementation, or provide feedback to revise the plan.
           claude_args: |
-            --max-turns 20
+            --max-turns 5
             --model claude-sonnet-4-5-20250929
-          track_progress: true       # Show progress in issue comments
-          branch_prefix: "claude/"   # Creates branches like claude/issue-123
-          base_branch: "main"        # Branch to create PRs against
+          track_progress: true
+          use_sticky_comment: true
 
-      # Automatically create a PR after Claude completes implementation
-      - name: Create PR if needed
-        if: steps.claude.outcome == 'success'
+      # =========== CODING PHASE ===========
+      - name: Run Claude - Coding Phase
+        if: steps.phase.outputs.next_phase == 'coding'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implement the approved plan for issue #${{ github.event.issue.number }}.
+
+            Read the previous comments to understand the approved plan, then:
+            1. Write the code as specified in the plan
+            2. Commit your changes with clear commit messages
+            3. Push to the current branch
+
+            ⚠️ DO NOT create a PR yet. That happens after testing approval.
+
+            After implementing, provide a summary of:
+            - Files created/modified
+            - Key changes made
+            - Any deviations from the plan (and why)
+
+            End your response with:
+            ---
+            ✅ **Implementation complete.** Reply with `/approve` to proceed to testing, or provide feedback to revise the code.
+          claude_args: |
+            --max-turns 15
+            --model claude-sonnet-4-5-20250929
+          track_progress: true
+          use_sticky_comment: true
+          branch_prefix: "claude/"
+          base_branch: "main"
+
+      # =========== TESTING PHASE ===========
+      - name: Run Claude - Testing Phase
+        if: steps.phase.outputs.next_phase == 'testing'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Validate the implementation for issue #${{ github.event.issue.number }}.
+
+            1. Review the code changes made in previous phase
+            2. Run any existing tests if available
+            3. Verify the implementation matches the requirements
+            4. Check for obvious issues or bugs
+
+            Provide a testing report:
+            - What was tested
+            - Results (pass/fail)
+            - Any issues found
+            - Recommendations
+
+            End your response with:
+            ---
+            ✅ **Testing complete.** Reply with `/approve` to create the PR, or provide feedback to revise.
+          claude_args: |
+            --max-turns 10
+            --model claude-sonnet-4-5-20250929
+          track_progress: true
+          use_sticky_comment: true
+
+      # =========== PR CREATION PHASE ===========
+      - name: Create PR
+        if: steps.phase.outputs.next_phase == 'pr'
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # Get the current branch name
+          # Get current branch
           BRANCH=$(git branch --show-current)
           echo "Current branch: $BRANCH"
 
-          # Only create PR if we're on a claude/* branch
           if [[ $BRANCH == claude/* ]]; then
-            # Check if PR already exists to avoid duplicates
+            # Check if PR already exists
             EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
 
             if [ -z "$EXISTING_PR" ]; then
-              echo "No PR exists for $BRANCH, creating one..."
+              # Get issue title for PR
+              ISSUE_TITLE=$(gh issue view $ISSUE_NUMBER --json title --jq '.title')
 
-              # Use the latest commit message as the PR title
-              COMMIT_MSG=$(git log -1 --pretty=%s)
-
-              # Build PR description with issue reference and changes
               PR_BODY=$(cat <<EOF
-          Resolves #${{ github.event.issue.number }}
+          Resolves #$ISSUE_NUMBER
 
-          This PR was automatically created by the Claude auto-solve workflow.
+          This PR was created through the phased auto-solve workflow with human approval at each step.
+
+          ## Phases Completed
+          - ✅ Planning - Approved
+          - ✅ Implementation - Approved
+          - ✅ Testing - Approved
 
           ## Changes
           $(git log main..HEAD --pretty=format:'- %s')
@@ -155,17 +287,41 @@ jobs:
           EOF
               )
 
-              # Create the PR targeting main branch
               gh pr create \
                 --base main \
                 --head "$BRANCH" \
-                --title "$COMMIT_MSG" \
+                --title "Implement: $ISSUE_TITLE" \
                 --body "$PR_BODY"
 
-              echo "✓ PR created successfully"
+              # Update issue with completion
+              gh issue edit $ISSUE_NUMBER --remove-label "phase:testing" || true
+              gh issue edit $ISSUE_NUMBER --add-label "phase:complete"
+              gh issue comment $ISSUE_NUMBER --body "✅ **PR created!** All phases complete. The implementation is ready for final review."
             else
-              echo "PR #$EXISTING_PR already exists for $BRANCH"
+              echo "PR #$EXISTING_PR already exists"
             fi
           else
-            echo "Not on a claude/* branch, skipping PR creation"
+            echo "Not on a claude/* branch, cannot create PR"
           fi
+
+      # =========== REVISION (Feedback handling) ===========
+      - name: Run Claude - Revision
+        if: steps.phase.outputs.action == 'revise' && steps.phase.outputs.current_phase != 'none'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            The user has provided feedback on the current phase (${{ steps.phase.outputs.current_phase }}) for issue #${{ github.event.issue.number }}.
+
+            Their feedback: "${{ github.event.comment.body }}"
+
+            Please revise your work based on this feedback.
+
+            After revision, end your response with:
+            ---
+            ✅ **Revision complete.** Reply with `/approve` to proceed, or provide more feedback.
+          claude_args: |
+            --max-turns 10
+            --model claude-sonnet-4-5-20250929
+          track_progress: true
+          use_sticky_comment: true

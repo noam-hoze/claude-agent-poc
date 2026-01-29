@@ -43,11 +43,30 @@ Go to **Settings** > **Secrets and variables** > **Actions** and add:
 
 ## Usage
 
-### Auto-solve Issues
+### Auto-solve Issues (Phased Workflow)
 
-1. Create an issue describing what you want implemented
-2. Add the `auto-solve` label
-3. Claude will automatically create a PR with the implementation
+The auto-solve workflow includes human approval checkpoints to catch issues early:
+
+1. **Create an issue** describing what you want implemented
+2. **Add the `auto-solve` label** to start the workflow
+3. **Review each phase** and approve or provide feedback:
+
+```
+[PLANNING] → /approve → [CODING] → /approve → [TESTING] → /approve → [PR CREATED]
+     ↑                      ↑                      ↑
+   feedback              feedback               feedback
+   (revises)            (revises)              (revises)
+```
+
+**Commands:**
+- `/approve` - Approve the current phase and proceed
+- Any other comment - Provide feedback for Claude to revise
+
+**Phase Labels:**
+- `phase:planning` - Claude is analyzing and creating a plan
+- `phase:coding` - Claude is implementing the approved plan
+- `phase:testing` - Claude is validating the implementation
+- `phase:complete` - PR created, all phases approved
 
 ### Interactive Claude
 
