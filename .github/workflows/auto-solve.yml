@@ -79,6 +79,7 @@ jobs:
           claude_args: |
             --max-turns 20
             --model claude-sonnet-4-5-20250929
+            --allowedTools "Bash(gh *)"
           track_progress: true
           branch_prefix: "claude/"
           base_branch: "main"
