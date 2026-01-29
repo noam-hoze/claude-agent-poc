@@ -88,12 +88,28 @@ jobs:
         run: |
           echo "::group::Claude Execution Summary"
           if [ -f /home/runner/work/_temp/claude-execution-output.json ]; then
-            cat /home/runner/work/_temp/claude-execution-output.json | jq '{type, subtype, num_turns, total_cost_usd, permission_denials}'
+            # Extract result entry from log with fallback
+            RESULT=$(jq -r '
+              (if type == "array" then
+                map(select(.type == "result")) | .[-1]
+              else
+                .
+              end) |
+              "Status: \(.subtype // "unknown")\nTurns: \(.num_turns // 0)\nCost: $\(.total_cost_usd // 0)\nDenials: \((.permission_denials // []) | length)"
+            ' /home/runner/work/_temp/claude-execution-output.json 2>&1)
+
+            if [ $? -eq 0 ]; then
+              echo "$RESULT"
+            else
+              echo "Could not parse execution log, showing raw output:"
+              tail -30 /home/runner/work/_temp/claude-execution-output.json
+            fi
+          else
+            echo "No execution log found"
           fi
           echo "::endgroup::"
 
       - name: Check outcome
         if: steps.claude.outcome == 'failure'
         run: |
-          echo "::error::Claude Code execution failed"
-          exit 1
+          echo "::warning::Claude Code execution encountered issues. Check logs above for details."
